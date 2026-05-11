@@ -64,7 +64,6 @@ public class AreaController implements Serializable {
     private List<Area> districts = null;
     private Area selected;
     private Area deleting;
-    private List<Area> selectedAreas;
     private UploadedFile file;
 
     @Inject
@@ -149,25 +148,6 @@ public class AreaController implements Serializable {
         deleting = null;
         return toListAreasForSysAdmin();
     }
-
-    public void deleteSelectedAreas() {
-        if (selectedAreas == null || selectedAreas.isEmpty()) {
-            JsfUtil.addErrorMessage("No areas selected.");
-            return;
-        }
-        Date now = new Date();
-        for (Area a : selectedAreas) {
-            a.setRetired(true);
-            a.setRetiredAt(now);
-            a.setRetiredBy(webUserController.getLoggedUser());
-            getFacade().edit(a);
-        }
-        items = areaApplicationController.getAllAreas();
-        selectedAreas = null;
-    }
-
-    public List<Area> getSelectedAreas() { return selectedAreas; }
-    public void setSelectedAreas(List<Area> selectedAreas) { this.selectedAreas = selectedAreas; }
 
     public void reloadAreas(){
         areaApplicationController.reloadAreas();
