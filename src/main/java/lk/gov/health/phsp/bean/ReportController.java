@@ -24,7 +24,6 @@
 package lk.gov.health.phsp.bean;
 
 // <editor-fold defaultstate="collapsed" desc="Imports">
-import jakarta.validation.ReportAsSingleViolation;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
