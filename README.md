@@ -16,7 +16,8 @@ safe — the script is idempotent and switches to a redeploy when an existing
 
 ### Prerequisites
 
-- Ubuntu 20.04 LTS or newer (the script targets Debian/`apt-get`).
+- Ubuntu 20.04 LTS or newer (the script targets Debian/`apt-get`). Verified on
+  Ubuntu 24.04 LTS with MySQL 8.0.46.
 - A non-root user account with `sudo` access. **Do not run the installer with
   `sudo` or as `root`** — the script aborts in that case and calls `sudo`
   itself only where needed.
