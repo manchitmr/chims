@@ -79,12 +79,7 @@ Enter the MySQL root shell:
 sudo mysql -u root
 ```
 
-Configure the root password (MySQL 8 requires a strong password with uppercase, lowercase, digit, and special character):
-
-```sql
-ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'RootPassword@123';
-FLUSH PRIVILEGES;
-```
+On a stock Ubuntu install `root@localhost` authenticates over the unix socket, so it needs no password and none should be set. Switching it to password authentication breaks `sudo mysql` for every later step, including re-running `install.sh`.
 
 Create a dedicated database user:
 
@@ -97,7 +92,7 @@ CREATE USER 'chimsuser'@'localhost' IDENTIFIED WITH mysql_native_password BY 'Yo
 Create the database:
 
 ```sql
-CREATE DATABASE chims;
+CREATE DATABASE chims_v2;
 ```
 
 Grant privileges:
@@ -111,7 +106,7 @@ EXIT;
 #### Uploading a backup dataset (Optional)
 
 ```bash
-sudo mysql -u root chims < /path/to/backup.sql
+sudo mysql -u root chims_v2 < /path/to/backup.sql
 ```
 
 ---
@@ -203,8 +198,8 @@ Create the JDBC connection pool:
 ~/payara5/bin/asadmin create-jdbc-connection-pool \
   --datasourceclassname com.mysql.cj.jdbc.MysqlDataSource \
   --restype javax.sql.DataSource \
-  --property "ServerName=localhost:PortNumber=3306:DatabaseName=chims:User=chimsuser:Password=YourPassword@123:UseSSL=false:allowPublicKeyRetrieval=true:URL=jdbc\:mysql\://localhost\:3306/chims" \
-  chims
+  --property "ServerName=localhost:PortNumber=3306:DatabaseName=chims_v2:User=chimsuser:Password=YourPassword@123:UseSSL=false:allowPublicKeyRetrieval=true:URL=jdbc\:mysql\://localhost\:3306/chims_v2" \
+  chims_v2
 ```
 
 > Replace `YourPassword@123` with the password you set for `chimsuser`.
@@ -220,7 +215,7 @@ You should see: `Command ping-connection-pool executed successfully.`
 Create the JDBC resource (JNDI name):
 
 ```bash
-~/payara5/bin/asadmin create-jdbc-resource --connectionpoolid chims jdbc/chims
+~/payara5/bin/asadmin create-jdbc-resource --connectionpoolid chims_v2 jdbc/chims_v2
 ```
 
 ### Option B — Web Console
@@ -241,12 +236,12 @@ Click **Next**, then add the following **Additional Properties**:
 | ----------------------- | ------------------------------------------ |
 | `ServerName`            | `localhost`                                |
 | `PortNumber`            | `3306`                                     |
-| `DatabaseName`          | `chims`                                    |
+| `DatabaseName`          | `chims_v2`                                 |
 | `User`                  | `chimsuser`                                |
 | `Password`              | `YourPassword@123`                         |
 | `UseSSL`                | `false`                                    |
 | `allowPublicKeyRetrieval` | `true`                                   |
-| `URL`                   | `jdbc:mysql://localhost:3306/chims`        |
+| `URL`                   | `jdbc:mysql://localhost:3306/chims_v2`     |
 
 Click **Finish**, then click **Ping** and look for **Ping Succeeded**.
 
@@ -254,8 +249,8 @@ Click **Finish**, then click **Ping** and look for **Ping Succeeded**.
 
 Go to **Resources → JDBC → JDBC Resources → New**
 
-- **JNDI Name:** `jdbc/chims`
-- **Pool Name:** `chims`
+- **JNDI Name:** `jdbc/chims_v2`
+- **Pool Name:** `chims_v2`
 
 Click **OK**.
 
@@ -281,15 +276,18 @@ Before building, verify that `src/main/resources/META-INF/persistence.xml` conta
     <persistence-unit name="hmisPU" transaction-type="JTA">
         <description>cHIMS</description>
         <provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
-        <jta-data-source>jdbc/chims</jta-data-source>
+        <jta-data-source>jdbc/chims_v2</jta-data-source>
         <properties>
-            <property name="eclipselink.ddl-generation" value="none"/>
+            <property name="eclipselink.ddl-generation" value="create-tables"/>
+            <property name="eclipselink.ddl-generation.output-mode" value="database"/>
         </properties>
     </persistence-unit>
 </persistence>
 ```
 
-> **Important**: The JTA data source name `jdbc/chims` must match exactly the JNDI name you created in the Payara configuration step above. DDL generation is set to `none` because Payara/EclipseLink's auto-generated DDL for MySQL can hit reserved-word conflicts (e.g. `PROCEDURE`). Schema creation is handled separately.
+> **Important**: The JTA data source name `jdbc/chims_v2` must match exactly the JNDI name you created in the Payara configuration step above, or deployment fails.
+>
+> DDL generation is `create-tables` with `output-mode=database`, so EclipseLink creates the schema directly on first deploy. Deployment logs `expected DDL file ... not available` — that warning is expected and harmless, because no DDL script is written.
 
 #### Build the WAR
 
@@ -374,9 +372,20 @@ sudo rm -rf ~/payara5
 
 ### Deployment fails with a SQL syntax error involving `PROCEDURE`
 
-**Cause:** EclipseLink's automatic DDL generation produces SQL that uses MySQL reserved words (e.g. `PROCEDURE`), causing a syntax error on MySQL 8.
+**Cause:** `PROCEDURE` is a reserved word in MySQL. The `Procedure` entity mapped
+to a table of that name, so EclipseLink emitted `CREATE TABLE PROCEDURE (...)`
+and MySQL rejected it. Deployment still reported success, leaving the schema one
+table short and every procedure lookup failing at runtime.
 
-**Fix:** Set `eclipselink.ddl-generation` to `none` in `persistence.xml` (as shown in the installation steps above) and manage schema creation manually.
+**Fix:** Already applied — the entity declares the table as a delimited
+identifier, so the name is emitted inside backticks. Rebuild and redeploy if you
+are running code from before that change. Verify with:
+
+```sql
+SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='chims_v2';
+```
+
+A complete schema has 45 tables (44 entities plus `SEQUENCE`).
 
 ---
 
