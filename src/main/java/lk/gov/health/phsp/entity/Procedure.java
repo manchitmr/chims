@@ -46,7 +46,9 @@ import lk.gov.health.phsp.pojcs.Identifiable;
  * @author Dr M H B Ariyaratne<buddhika.ari@gmail.com>
  */
 @Entity
-@Table
+// PROCEDURE is a reserved word in MySQL; the name must be emitted as a
+// delimited identifier or DDL generation fails with a syntax error.
+@Table(name = "\"PROCEDURE\"")
 
 public class Procedure implements Serializable, Identifiable  {
 
